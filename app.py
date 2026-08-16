@@ -47,8 +47,9 @@ def detect_intent(text: str):
 
 
 # كل نية (غير men_prices) بترجعلها نص واحد ثابت من content.py
+# لو القيمة list، هيتبعتوا كرسايل منفصلة واحدة ورا التانية
 TEXT_REPLIES = {
-    "women_prices": content.WOMEN_PRICES_MSG,
+    "women_prices": content.WOMEN_PRICES_MSG,  # list من رسالتين
     "address": content.ADDRESS_MSG,
     "hours": content.HOURS_MSG,
     "booking": content.BOOKING_MSG,
@@ -68,7 +69,9 @@ TEXT_REPLIES = {
 
 def build_reply(message_text: str, sender_name: str = None):
     """يحدد الرد المناسب بناءً على النية + تخمين الجنس لو محتاج
-    بيرجع dict: {"type": "text", "text": "..."} أو {"type": "image", "url": "...", "caption": "..."}
+    بيرجع dict: {"type": "text", "text": "..."} أو
+    {"type": "text_multi", "texts": [...]} أو
+    {"type": "image", "url": "...", "caption": "..."}
     """
     intent = detect_intent(message_text)
 
@@ -76,7 +79,10 @@ def build_reply(message_text: str, sender_name: str = None):
         return {"type": "image", "url": content.MEN_PRICES_IMAGE_URL, "caption": content.MEN_PRICES_CAPTION}
 
     if intent in TEXT_REPLIES:
-        return {"type": "text", "text": TEXT_REPLIES[intent]}
+        value = TEXT_REPLIES[intent]
+        if isinstance(value, list):
+            return {"type": "text_multi", "texts": value}
+        return {"type": "text", "text": value}
 
     # لو العميل كتب كلمة "أسعار" بس من غير تحديد رجالي/حريمي
     if "سعر" in message_text or "اسعار" in message_text or "أسعار" in message_text:
@@ -84,7 +90,7 @@ def build_reply(message_text: str, sender_name: str = None):
         if gender == "male":
             return {"type": "image", "url": content.MEN_PRICES_IMAGE_URL, "caption": content.MEN_PRICES_CAPTION}
         if gender == "female":
-            return {"type": "text", "text": content.WOMEN_PRICES_MSG}
+            return {"type": "text_multi", "texts": content.WOMEN_PRICES_MSG}
         return {"type": "text", "text": content.ASK_GENDER_MSG}
 
     return {"type": "text", "text": content.FALLBACK_MSG}
@@ -173,6 +179,9 @@ def handle_webhook():
             reply = build_reply(text, sender_name)
             if reply["type"] == "image":
                 send_image(sender_id, reply["url"], reply.get("caption"))
+            elif reply["type"] == "text_multi":
+                for part in reply["texts"]:
+                    send_message(sender_id, part)
             else:
                 send_message(sender_id, reply["text"])
 
